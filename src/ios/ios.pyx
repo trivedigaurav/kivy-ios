@@ -11,13 +11,30 @@ from os.path import basename
 
 cdef extern from "ios_wrapper.h":
     ctypedef void (*ios_send_email_cb)(char *, void *)
+    ctypedef void (*ios_billing_info_cb)(char *, char *, char *, char *, double, void *)
     int ios_send_email(char *subject, char *text, char *mimetype, char
             *filename, char *filename_alias, ios_send_email_cb cb, void *userdata)
     void ios_open_url(char *url)
+    int ios_billing_info(char *sku, ios_billing_info_cb callback, void *userdata)
 
 cdef void _send_email_done(char *status, void *data):
     cdef object callback = <object>data
     callback(status)
+    Py_DECREF(callback)
+
+cdef void _billing_info_done(char *sku, char *status, char *title, char
+        *description, double price, void *data):
+    cdef object callback = <object>data
+    cdef dict resp = None
+    if callback is None:
+        return
+    if <bytes>status == 'ok':
+        resp = {
+            'title': title,
+            'description': description,
+            'price': price,
+            'sku': sku }
+    callback(sku, status, resp)
     Py_DECREF(callback)
 
 
@@ -157,5 +174,19 @@ def send_email(subject, text, mimetype=None, filename=None, filename_alias=None,
     elif ret == -1:
         callback('cannotsend')
         return 0
+
+    return 1
+
+def billing_info(sku, callback=None):
+    cdef char *j_sku = NULL
+
+    if sku is not None:
+        if type(sku) is unicode:
+            sku = sku.encode('UTF-8')
+        j_sku = <bytes>sku
+
+    Py_INCREF(callback)
+
+    ret = ios_billing_info(j_sku, _billing_info_done, <void *>callback)
 
     return 1
