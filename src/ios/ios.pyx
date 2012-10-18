@@ -227,7 +227,7 @@ class BillingService(object):
         for item in pitems.split('\n'):
             if not item:
                 continue
-            sku, qt = item.split(',')
+            sku, qt = item.split(',', 1)
             ret[sku] = {'qt': int(qt)}
         return ret
 

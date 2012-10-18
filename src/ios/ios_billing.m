@@ -2,6 +2,11 @@
  * In-App Billing support
  *
  * Done by following http://troybrant.net/blog/2010/01/in-app-purchases-a-full-walkthrough/
+ *
+ * !!!
+ * It have been tested only with non-consumable items.
+ * Any other type should be implemented
+ * !!!
  */
 
 #import <StoreKit/StoreKit.h>
@@ -50,7 +55,6 @@
     request = [[SKProductsRequest alloc] initWithProductIdentifiers:productIdentifiers];
     request.delegate = self;
     [request start];
-	NSLog(@"Request information for: %@", sku);
 }
 
 - (void)productsRequest:(SKProductsRequest *)request didReceiveResponse:(SKProductsResponse *)response
@@ -82,19 +86,14 @@
 }
 - (void)request:(SKRequest *)request didFailWithError:(NSError *)error
 {
-    printf("got error\n");
-	NSLog(@"error??");
 }
 
 - (void)requestDidFinish:(SKRequest *)request
 {
-    printf("finished\n");
-	NSLog(@"finished??");
 }
 
 - (void)dealloc
 {
-	printf("dealloc\n");
 	[super dealloc];
 }
 
@@ -143,12 +142,33 @@
 {
 	// add the product id in our available items
 	NSString *items = [[NSUserDefaults standardUserDefaults] stringForKey:kInAppPurchaseManagerAvailableItems];
+	NSString *item;
+	NSArray *listItems, *itemInfos;
+	NSString *sku = transaction.payment.productIdentifier;
+	int i, found = 0;
 
 	if ( items == nil ) {
-		items = transaction.payment.productIdentifier;
+		items = sku;
+		items = [items stringByAppendingString:@",1"];
 	} else {
-		items = [items stringByAppendingString:@","];
-		items = [items stringByAppendingString:transaction.payment.productIdentifier];
+
+		// search if the item have already been bought
+		listItems = [items componentsSeparatedByString:@"\n"];
+		for ( i = 0; i < [listItems count]; i++ ) {
+			itemInfos = [listItems objectAtIndex:i];
+			item = [[itemInfos componentsSeparatedByString:@","] objectAtIndex:0];
+			if ( [item isEqualToString:sku] ) {
+				found = 1;
+				break;
+			}
+		}
+
+		// never appended, do it.
+		if ( found == 0 ) {
+			items = [items stringByAppendingString:@"\n"];
+			items = [items stringByAppendingString:transaction.payment.productIdentifier];
+			items = [items stringByAppendingString:@",1"];
+		}
 	}
 
 	// save the transaction receipt to disk
