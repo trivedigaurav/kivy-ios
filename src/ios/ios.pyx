@@ -16,6 +16,11 @@ cdef extern from "ios_wrapper.h":
             *filename, char *filename_alias, ios_send_email_cb cb, void *userdata)
     void ios_open_url(char *url)
     int ios_billing_info(char *sku, ios_billing_info_cb callback, void *userdata)
+    void ios_billing_service_start()
+    void ios_billing_service_stop()
+    void ios_billing_buy(char *sku)
+    char *ios_billing_get_purchased_items()
+    char *ios_billing_get_pending_message()
 
 cdef void _send_email_done(char *status, void *data):
     cdef object callback = <object>data
@@ -190,3 +195,71 @@ def billing_info(sku, callback=None):
     ret = ios_billing_info(j_sku, _billing_info_done, <void *>callback)
 
     return 1
+
+
+class BillingService(object):
+    BILLING_ACTION_SUPPORTED = 'billingsupported'
+    BILLING_ACTION_ITEMSCHANGED = 'itemschanged'
+    BILLING_TYPE_INAPP = 'inapp'
+    BILLING_TYPE_SUBSCRIPTION = 'subs'
+
+    def __init__(self, callback):
+        super(BillingService, self).__init__()
+        self.callback = callback
+        self.purchased_items = None
+        ios_billing_service_start()
+
+    def _stop(self):
+        ios_billing_service_stop()
+
+    def buy(self, sku):
+        cdef char *j_sku = <bytes>sku
+        ios_billing_buy(sku)
+
+    def get_purchased_items(self):
+        cdef char *items = NULL
+        cdef bytes pitem
+        items = ios_billing_get_purchased_items()
+        if items == NULL:
+            return []
+        pitems = items
+        ret = {}
+        for item in pitems.split('\n'):
+            if not item:
+                continue
+            sku, qt = item.split(',')
+            ret[sku] = {'qt': int(qt)}
+        return ret
+
+    def check(self, *largs):
+        cdef char *message
+        cdef bytes pymessage
+
+        while True:
+            message = ios_billing_get_pending_message()
+            if message == NULL:
+                break
+            pymessage = <bytes>message
+            self._handle_message(pymessage)
+
+        if self.purchased_items is None:
+            self._check_new_items()
+
+    def _handle_message(self, message):
+        action, data = message.split('|', 1)
+        print 'HANDLE MESSAGE------', (action, data)
+
+        if action == 'billingSupported':
+            tp, value = data.split('|', 1)
+            value = True if value == '1' else False
+            self.callback(BillingService.BILLING_ACTION_SUPPORTED, tp, value)
+
+        elif action == 'checkItems':
+            self._check_new_items()
+
+    def _check_new_items(self):
+        items = self.get_purchased_items()
+        if self.purchased_items != items:
+            self.purchased_items = items
+            self.callback(BillingService.BILLING_ACTION_ITEMSCHANGED,
+                    self.purchased_items)
