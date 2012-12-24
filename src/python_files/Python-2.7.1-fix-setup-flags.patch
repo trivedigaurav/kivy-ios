@@ -1,0 +1,15 @@
+--- Python-2.7.1/setup.py.orig	2012-12-24 15:16:33.000000000 +0100
++++ Python-2.7.1/setup.py	2012-12-24 15:16:58.000000000 +0100
+@@ -408,6 +408,12 @@
+             '/lib', '/usr/lib',
+             ]
+         inc_dirs = self.compiler.include_dirs + ['/usr/include']
++        cflags = os.environ.get('CFLAGS')
++        if cflags:
++            inc_dirs += [x[2:] for x in cflags.split() if x.startswith('-I')]
++        ldflags = os.environ.get('LDFLAGS')
++        if ldflags:
++            lib_dirs += [x[2:] for x in ldflags.split() if x.startswith('-L')]
+         exts = []
+         missing = []
+ 

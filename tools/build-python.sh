@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -x
+
 . $(dirname $0)/environment.sh
 
 # credit to:
@@ -21,6 +23,7 @@ try pushd $TMPROOT/Python-$PYTHON_VERSION
 try patch -p1 < $KIVYIOSROOT/src/python_files/Python-$PYTHON_VERSION-ssize-t-max.patch
 try patch -p1 < $KIVYIOSROOT/src/python_files/Python-$PYTHON_VERSION-dynload.patch
 try patch -p1 < $KIVYIOSROOT/src/python_files/Python-$PYTHON_VERSION-static-_sqlite3.patch
+try patch -p1 < $KIVYIOSROOT/src/python_files/Python-$PYTHON_VERSION-fix-setup-flags.patch
 
 # Copy our setup for modules
 try cp $KIVYIOSROOT/src/python_files/ModulesSetup Modules/Setup.local
@@ -29,7 +32,7 @@ try cp $KIVYIOSROOT/src/python_files/_scproxy.py Lib/_scproxy.py
 
 echo "Building for native machine ============================================"
 
-try ./configure CC="$CCACHE clang -Qunused-arguments -fcolor-diagnostics" LDFLAGS="-lsqlite3"
+try ./configure CC="$CCACHE clang -Qunused-arguments -fcolor-diagnostics -I$BUILDROOT/include" LDFLAGS="-lsqlite3 -L$BUILDROOT/lib"
 try make python.exe Parser/pgen
 try mv python.exe hostpython
 try mv Parser/pgen Parser/hostpgen
@@ -54,9 +57,16 @@ ln -s "$SDKROOT/usr/lib/libgcc_s.1.dylib" extralibs/libgcc_s.10.4.dylib || echo 
 try cp $KIVYIOSROOT/src/python_files/ModulesSetup Modules/Setup.local
 try cp $KIVYIOSROOT/src/python_files/_scproxy.py Lib/_scproxy.py
 
+# activate openssl ?
+cat >> Modules/Setup.local <<EOF
+_ssl _ssl.c \
+    -DUSE_SSL -I$BUILDROOT/include -I$BUILDROOT/include/openssl \
+    -L$BUILDROOT/lib -lssl -lcrypto
+EOF
+
 try ./configure CC="$ARM_CC" LD="$ARM_LD" \
-	CFLAGS="$ARM_CFLAGS" \
-	LDFLAGS="$ARM_LDFLAGS -Lextralibs/ -lsqlite3" \
+	CFLAGS="$ARM_CFLAGS -I$BUILDROOT/include" \
+	LDFLAGS="$ARM_LDFLAGS -Lextralibs/ -lsqlite3 -L$BUILDROOT/lib" \
 	--disable-toolbox-glue \
 	--host=armv7-apple-darwin \
 	--prefix=/python \
